@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Sync Test Client</title>
+    <!-- 引入 Socket.io 客户端库 -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        #status {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            color: white;
+            text-align: center;
+            font-weight: bold;
+        }
+        .connected {
+            background-color: #28a745;
+        }
+        .disconnected {
+            background-color: #dc3545;
+        }
+        #registration, #controls {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        #registration h2, #controls h2 {
+            margin-top: 0;
+            color: #555;
+        }
+        #registration input, #controls textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        #controls textarea {
+            height: 100px;
+            resize: vertical;
+            font-family: Consolas, monospace;
+        }
+        #controls button, #registration button {
+            padding: 10px 20px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #controls button:hover, #registration button:hover {
+            opacity: 0.9;
+        }
+        #controls button:disabled, #registration button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #connectButton {
+            background-color: #007bff;
+            color: white;
+        }
+        #disconnectButton {
+            background-color: #dc3545;
+            color: white;
+        }
+        #sendTextButton {
+            background-color: #28a745;
+            color: white;
+        }
+        #sendImageLabel {
+            padding: 10px 20px;
+            background-color: #17a2b8;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            display: inline-block;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+        #sendImageLabel:hover {
+            background-color: #138496;
+        }
+        #imageInput {
+            display: none;
+        }
+        #messages {
+            max-height: 500px;
+            overflow-y: auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-left: 4px solid #007bff;
+            background-color: #f1f1f1;
+            border-radius: 5px;
+        }
+        .message.text {
+            white-space: pre-wrap; /* 保留换行和空格 */
+            font-family: Consolas, monospace; /* 使用等宽字体显示代码 */
+            color: #333;
+        }
+        .message.image img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+        }
+        .sent {
+            border-left-color: #28a745;
+            background-color: #e6ffe6;
+        }
+        .received {
+            border-left-color: #007bff;
+            background-color: #e6f0ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sync Test Client</h1>
+
+    <!-- 连接状态显示 -->
+    <div id="status" class="disconnected">Disconnected</div>
+
+    <!-- 用户注册表单 -->
+    <div id="registration">
+        <h2>Register</h2>
+        <input type="text" id="roomInput" placeholder="Room ID (同步房间)">
+        <input type="text" id="userIdInput" placeholder="User ID (用户ID)">
+        <button id="connectButton" onclick="connect()">Connect</button>
+        <button id="disconnectButton" onclick="disconnect()" disabled>Disconnect</button>
+    </div>
+
+    <!-- 发送消息区域，初始隐藏 -->
+    <div id="controls" style="display: none;">
+        <h2>Send Clipboard Data</h2>
+        <!-- 使用 textarea 替代 input -->
+        <textarea id="messageInput" placeholder="Type message here"></textarea>
+        <button id="sendTextButton" onclick="sendText()">Send Text</button>
+        <label for="imageInput" id="sendImageLabel">Send Image</label>
+        <input type="file" id="imageInput" accept="image/*" onchange="sendImage(event)">
+    </div>
+
+    <!-- 接收消息显示区域 -->
+    <div id="messages"></div>
+
+    <script>
+        // 初始化变量
+        let room = '';
+        let userId = '';
+        let socket;
+
+        // 获取 DOM 元素
+        const status = document.getElementById('status');
+        const registration = document.getElementById('registration');
+        const controls = document.getElementById('controls');
+        const messages = document.getElementById('messages');
+        const roomInput = document.getElementById('roomInput');
+        const userIdInput = document.getElementById('userIdInput');
+        const messageInput = document.getElementById('messageInput');
+        const imageInput = document.getElementById('imageInput');
+        const connectButton = document.getElementById('connectButton');
+        const disconnectButton = document.getElementById('disconnectButton');
+        const sendTextButton = document.getElementById('sendTextButton');
+
+        /**
+         * 连接到服务器并注册
+         */
+        function connect() {
+            room = roomInput.value.trim();
+            userId = userIdInput.value.trim();
+
+            if (!room || !userId) {
+                alert('Please enter both Room ID and User ID.');
+                return;
+            }
+
+            // 初始化 Socket.io 客户端，指定仅使用 WebSocket 传输
+            socket = io('http://synchro.oopstls.com:7000', {
+                autoConnect: false,
+                transports: ['websocket']
+            });
+
+            // 监听连接成功事件
+            socket.on('connect', () => {
+                status.textContent = `Connected (Socket ID: ${socket.id})`;
+                status.className = 'connected';
+                console.log(`Connected to server with Socket ID: ${socket.id}`);
+
+                // 发送注册信息
+                socket.emit('register', { room, userId });
+
+                // 显示发送控件
+                controls.style.display = 'block';
+
+                // 控制按钮状态
+                connectButton.disabled = true;
+                disconnectButton.disabled = false;
+            });
+
+            // 监听连接错误事件
+            socket.on('connect_error', (error) => {
+                console.error('Connection Error:', error);
+                alert('Failed to connect to the server.');
+                status.textContent = 'Connection Error';
+                status.className = 'disconnected';
+            });
+
+            // 监听注册错误事件
+            socket.on('registrationError', (data) => {
+                alert(`Registration Error: ${data.message}`);
+                disconnect();
+            });
+
+            // 监听断开连接事件
+            socket.on('disconnect', (reason) => {
+                status.textContent = 'Disconnected';
+                status.className = 'disconnected';
+                console.log(`Disconnected from server: ${reason}`);
+
+                // 隐藏发送控件
+                controls.style.display = 'none';
+
+                // 清空消息区域
+                messages.innerHTML = '';
+
+                // 控制按钮状态
+                connectButton.disabled = false;
+                disconnectButton.disabled = true;
+            });
+
+            // 接收同步数据事件
+            socket.on('syncData', (data) => {
+                console.log('Received syncData:', data);
+                // 判断消息是否由当前用户发送
+                const isSent = data.fromUserId === userId;
+                displayMessage(data, isSent);
+            });
+
+            // 接收历史消息事件
+            socket.on('history', (historyMessages) => {
+                console.log('Received history messages:', historyMessages);
+                
+                // 清空消息区域
+                messages.innerHTML = '';
+
+                historyMessages.forEach(message => {
+                    const data = {
+                        type: message.type,
+                        content: message.content,
+                        fromUserId: message.fromUserId,
+                        timestamp: message.timestamp
+                    };
+                    displayMessage(data, data.fromUserId === userId);
+                });
+            });
+
+            // 监听历史消息获取失败事件
+            socket.on('historyError', (data) => {
+                alert(`History Error: ${data.message}`);
+            });
+
+            // 自动重连逻辑（可选）
+            socket.io.on('reconnect_attempt', () => {
+                console.log('Attempting to reconnect...');
+            });
+
+            // 连接到服务器
+            socket.connect();
+        }
+
+        /**
+         * 断开与服务器的连接
+         */
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+            }
+        }
+
+        /**
+         * 发送文本同步数据
+         */
+        function sendText() {
+            const content = messageInput.value.trim();
+            if (!content) {
+                alert('Please enter a message to send.');
+                return;
+            }
+
+            const data = {
+                type: 'text',
+                content: content
+                // 不需要客户端发送 timestamp
+            };
+
+            // 发送同步数据到服务器
+            socket.emit('syncData', data);
+
+            // 清空输入框
+            messageInput.value = '';
+        }
+
+        /**
+         * 发送图片同步数据
+         * @param {Event} event - 文件选择事件
+         */
+        function sendImage(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64Image = e.target.result;
+                const data = {
+                    type: 'image',
+                    content: base64Image
+                    // 不需要客户端发送 timestamp
+                };
+
+                // 发送同步数据到服务器
+                socket.emit('syncData', data);
+
+                // 清空文件输入
+                imageInput.value = '';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        /**
+         * 显示消息到消息区域
+         * @param {Object} data - 消息数据
+         * @param {boolean} isSent - 是否为发送的消息
+         */
+        function displayMessage(data, isSent) {
+            const div = document.createElement('div');
+            div.className = `message ${data.type} ${isSent ? 'sent' : 'received'}`;
+
+            const timestamp = data.timestamp; // 使用服务器提供的时间戳
+
+            let messageContent = '';
+            if (data.type === 'text') {
+                if (isSent) {
+                    messageContent = `<strong>Sent [${timestamp}] (UserID: ${userId}):</strong> ${escapeHtml(data.content)}`;
+                } else {
+                    messageContent = `<strong>Received [${timestamp}] (UserID: ${data.fromUserId}):</strong> ${escapeHtml(data.content)}`;
+                }
+            } else if (data.type === 'image') {
+                if (isSent) {
+                    messageContent = `<strong>Sent [${timestamp}] (UserID: ${userId}):</strong><br><img src="${data.content}" alt="Image">`;
+                } else {
+                    messageContent = `<strong>Received [${timestamp}] (UserID: ${data.fromUserId}):</strong><br><img src="${data.content}" alt="Image">`;
+                }
+            }
+
+            div.innerHTML = messageContent;
+
+            // 在消息前添加换行
+            const br = document.createElement('br');
+            messages.prepend(br);
+            messages.prepend(div);
+
+            // 自动滚动到最新消息
+            messages.scrollTop = 0;
+
+            // 也 log to console with user info
+            if (isSent) {
+                console.log(`Sent | Time: ${timestamp} | UserID: ${userId}\n${data.content}`);
+            } else {
+                console.log(`Received | Time: ${timestamp} | UserID: ${data.fromUserId}\n${data.content}`);
+            }
+        }
+
+        /**
+         * 转义HTML字符，防止XSS攻击
+         * @param {string} unsafe - 未转义的字符串
+         * @returns {string} - 转义后的字符串
+         */
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        /**
+         * 支持按回车发送文本消息，同时允许 Shift+Enter 换行
+         */
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { // 按回车键发送，按 Shift+Enter 换行
+                e.preventDefault(); // 防止默认换行行为
+                sendText();
+            }
+        });
+    </script>
+</body>
+</html>
+
