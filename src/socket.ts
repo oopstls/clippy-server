@@ -61,7 +61,7 @@ function handleSocket(io: Server) {
       }
 
       // 监听同步数据事件
-      socket.on('syncData', (data: Message) => {
+      socket.on('sendMessage', (data: Message) => {
         messageLog(new Date(), room, userId, data.type);
 
         // 存储消息到数据库，获取服务器记录的时间戳
@@ -81,7 +81,7 @@ function handleSocket(io: Server) {
           userId: userId,
           timestamp: timestamp
         };
-        io.in(room).emit('syncData', dataToSend);
+        io.in(room).emit('sendMessage', dataToSend);
       });
 
       // 处理客户端断开连接
