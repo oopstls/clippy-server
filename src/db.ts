@@ -2,7 +2,8 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import config from './config';
 import fs from 'fs';
-import { HistoryMessage } from './types'; // 确保导入 HistoryMessage
+import { HistoryMessage } from './types';
+import { generalLog } from './logger';
 
 // 定义 InsertResult 接口
 interface InsertResult {
@@ -13,7 +14,7 @@ interface InsertResult {
 const dbDir = path.join(__dirname, '../', config.database.path);
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
-  console.log(`已创建数据库目录: ${dbDir}`);
+  generalLog(new Date(), `已创建数据库目录: ${dbDir}`);
 }
 
 // 数据库连接缓存
@@ -45,10 +46,10 @@ function getRoomDB(room: string): Database.Database {
     `).run();
     
     dbConnections.set(room, db);
-    console.log(`成功连接到房间 ${room} 的数据库: ${dbPath}`);
+    generalLog(new Date(), `成功连接到房间 ${room} 的数据库: ${dbPath}`);
     return db;
   } catch (error) {
-    console.error(`无法连接到房间 ${room} 的数据库: ${error}`);
+    generalLog(new Date(), `无法连接到房间 ${room} 的数据库: ${error}`);
     throw error;
   }
 }
@@ -72,7 +73,7 @@ export function insertMessage(room: string, userId: string, type: 'text' | 'imag
     
     const result = stmt.get(userId, type, content) as InsertResult;
     
-    console.log(`插入消息到房间 ${room} | 用户ID: ${userId} | 类型: ${type} | 时间戳: ${result.timestamp}`);
+    generalLog(new Date(), `插入消息到房间 ${room} | 用户ID: ${userId} | 类型: ${type} | 时间戳: ${result.timestamp}`);
     
     if (result && result.timestamp) {
       return result.timestamp;
@@ -80,7 +81,7 @@ export function insertMessage(room: string, userId: string, type: 'text' | 'imag
       throw new Error('Failed to retrieve timestamp after inserting message');
     }
   } catch (error) {
-    console.error(`插入消息失败 | 房间: ${room} | 用户ID: ${userId} | 类型: ${type} | 错误: ${error}`);
+    generalLog(new Date(), `插入消息失败 | 房间: ${room} | 用户ID: ${userId} | 类型: ${type} | 错误: ${error}`);
     throw error;
   }
 }
@@ -100,10 +101,10 @@ export function getMessages(room: string): HistoryMessage[] {
     `);
     
     const messages = stmt.all() as HistoryMessage[];
-    console.log(`获取房间 ${room} 的历史消息数量: ${messages.length}`);
+    generalLog(new Date(), `获取房间 ${room} 的历史消息数量: ${messages.length}`);
     return messages;
   } catch (error) {
-    console.error(`获取房间 ${room} 的历史消息失败: ${error}`);
+    generalLog(new Date(), `获取房间 ${room} 的历史消息失败: ${error}`);
     throw error;
   }
 }
@@ -117,7 +118,7 @@ export function closeRoomDB(room: string): void {
   if (db) {
     db.close();
     dbConnections.delete(room);
-    console.log(`已关闭房间 ${room} 的数据库连接`);
+    generalLog(new Date(), `已关闭房间 ${room} 的数据库连接`);
   }
 }
 

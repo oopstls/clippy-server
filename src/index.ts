@@ -1,10 +1,11 @@
+import { generalLog } from './logger';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import config from './config';
 import handleSocket from './socket';
-import './db'; // 确保数据库初始化
+import './db';
 
-console.log(`
+generalLog(new Date(), `
   ####   ####      ####    ######   ######   ##  ##
  ##  ##   ##        ##      ##  ##   ##  ##  ##  ##
 ##        ##        ##      ##  ##   ##  ##  ##  ##
@@ -34,6 +35,6 @@ handleSocket(io);
 
 // 启动服务器监听
 httpServer.listen(config.port, () => {
-  console.log(`服务器正在端口 ${config.port} 上运行`);
+  generalLog(new Date(), `服务器正在端口 ${config.port} 上运行`);
 });
 
