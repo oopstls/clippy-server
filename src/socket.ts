@@ -38,23 +38,19 @@ function handleSocket(io: Server) {
         return;
       }
 
-      // 转换房间号为包含日期的房间号
-      const dateStr = getCurrentDateString();
-      const datedRoom = `${dateStr}_${room}`;
-
-      console.log(`Socket ${socket.id} 尝试注册房间: ${datedRoom}, 用户ID: ${userId}`);
+      console.log(`Socket ${socket.id} 尝试注册房间: ${room}, 用户ID: ${userId}`);
 
       // 检查是否房间已存在
-      if (!roomUsers.has(datedRoom)) {
-        roomUsers.set(datedRoom, new Map());
-        console.log(`已创建新的房间映射: ${datedRoom}`);
+      if (!roomUsers.has(room)) {
+        roomUsers.set(room, new Map());
+        console.log(`已创建新的房间映射: ${room}`);
       }
 
-      const usersInRoom = roomUsers.get(datedRoom)!;
+      const usersInRoom = roomUsers.get(room)!;
 
       // 检查用户ID是否已存在
       if (usersInRoom.has(userId)) {
-        console.log(`用户ID ${userId} 在房间 ${datedRoom} 已存在，断开连接`);
+        console.log(`用户ID ${userId} 在房间 ${room} 已存在，断开连接`);
         socket.emit('registrationError', { message: 'User ID already exists in this room.' });
         socket.disconnect();
         return;
@@ -62,12 +58,12 @@ function handleSocket(io: Server) {
 
       // 注册用户
       usersInRoom.set(userId, socket);
-      socket.join(datedRoom);
-      console.log(`Socket ${socket.id} 成功注册房间: ${datedRoom}, 用户ID: ${userId}`);
+      socket.join(room);
+      console.log(`Socket ${socket.id} 成功注册房间: ${room}, 用户ID: ${userId}`);
 
       // 获取历史消息并发送给该用户
       try {
-        const historyMessages: HistoryMessage[] = getMessages(datedRoom);
+        const historyMessages: HistoryMessage[] = getMessages(room);
         // 将 HistoryMessage 转换为 SyncData，包含 timestamp
         const syncHistory: SyncData[] = historyMessages.map(msg => ({
           type: msg.type,
@@ -77,9 +73,9 @@ function handleSocket(io: Server) {
         }));
         // 在发送历史消息前清空消息区域
         socket.emit('history', syncHistory);
-        console.log(`发送历史消息给 Socket ${socket.id}，房间: ${datedRoom}`);
+        console.log(`发送历史消息给 Socket ${socket.id}，房间: ${room}`);
       } catch (error) {
-        console.error(`获取历史消息失败 | 房间: ${datedRoom} | 错误: ${error}`);
+        console.error(`获取历史消息失败 | 房间: ${room} | 错误: ${error}`);
         socket.emit('historyError', { message: 'Failed to retrieve history messages.' });
       }
 
@@ -87,14 +83,14 @@ function handleSocket(io: Server) {
       socket.on('syncData', (data: SyncData) => {
         const logContent = data.type === 'image' ? '[Image]' : data.content;
 
-        log('Received', new Date(), datedRoom, userId, data.type, logContent);
+        log('Received', new Date(), room, userId, data.type, logContent);
 
         // 存储消息到数据库，获取服务器记录的时间戳
         let timestamp: string;
         try {
-          timestamp = insertMessage(datedRoom, userId, data.type, data.content);
+          timestamp = insertMessage(room, userId, data.type, data.content);
         } catch (error) {
-          console.error(`存储消息失败 | 房间: ${datedRoom} | 用户ID: ${userId} | 类型: ${data.type} | 错误: ${error}`);
+          console.error(`存储消息失败 | 房间: ${room} | 用户ID: ${userId} | 类型: ${data.type} | 错误: ${error}`);
           socket.emit('error', { message: 'Failed to store message.' }); // 发送错误给客户端
           return; // 如果存储失败，不广播消息
         }
@@ -106,32 +102,24 @@ function handleSocket(io: Server) {
           fromUserId: userId,
           timestamp: timestamp
         };
-        io.in(datedRoom).emit('syncData', dataToSend);
+        io.in(room).emit('syncData', dataToSend);
 
         // 记录发送的消息
         const sentLogContent = data.type === 'image' ? '[Image]' : data.content;
-        log('Sent', new Date(), datedRoom, userId, data.type, sentLogContent);
+        log('Sent', new Date(), room, userId, data.type, sentLogContent);
       });
 
       // 处理客户端断开连接
       socket.on('disconnect', () => {
         console.log(`Socket断开连接: ${socket.id}`);
-        const users = roomUsers.get(datedRoom);
+        const users = roomUsers.get(room);
         if (users) {
           users.delete(userId);
-          console.log(`用户ID ${userId} 从房间 ${datedRoom} 中移除`);
+          console.log(`用户ID ${userId} 从房间 ${room} 中移除`);
 
           if (users.size === 0) {
-            roomUsers.delete(datedRoom);
-            console.log(`房间 ${datedRoom} 中的所有用户已断开`);
-
-            // 删除该房间的所有消息
-            try {
-              deleteMessages(datedRoom);
-              console.log(`已删除房间 ${datedRoom} 的所有历史消息`);
-            } catch (error) {
-              console.error(`删除房间消息失败 | 房间: ${datedRoom} | 错误: ${error}`);
-            }
+            roomUsers.delete(room);
+            console.log(`房间 ${room} 中的所有用户已断开`);
           }
         }
       });
