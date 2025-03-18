@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { messageLog, generalLog } from './logger';
-import { SyncData, RegisterData, HistoryMessage } from './types';
+import { Message, RegisterData } from './types';
 import { insertMessage, getMessages, closeRoomDB } from './db';
 
 // 房间用户管理：Map<room, Map<userId, Socket>>
@@ -18,7 +18,7 @@ function handleSocket(io: Server) {
     socket.on('register', async (registerData: RegisterData) => {
       const { room, userId } = registerData;
 
-      // 添加非空检查
+      // 非空检查
       if (!room || !userId) {
         generalLog(new Date(), `Socket ${socket.id} 注册失败：房间号或用户ID为空`);
         socket.emit('registrationError', { message: 'Room ID and User ID cannot be empty.' });
@@ -31,7 +31,7 @@ function handleSocket(io: Server) {
       // 检查是否房间已存在
       if (!roomUsers.has(room)) {
         roomUsers.set(room, new Map());
-        generalLog(new Date(), `已创建新的房间映射: ${room}`);
+        generalLog(new Date(), `已创建新的房间: ${room}`);
       }
 
       const usersInRoom = roomUsers.get(room)!;
@@ -51,16 +51,9 @@ function handleSocket(io: Server) {
 
       // 获取历史消息并发送给该用户
       try {
-        const historyMessages: HistoryMessage[] = getMessages(room);
-        // 将 HistoryMessage 转换为 SyncData，包含 timestamp
-        const syncHistory: SyncData[] = historyMessages.map(msg => ({
-          type: msg.type,
-          content: msg.content,
-          fromUserId: msg.userId,
-          timestamp: msg.timestamp
-        }));
+        const historyMessages: Message[] = getMessages(room);
         // 在发送历史消息前清空消息区域
-        socket.emit('history', syncHistory);
+        socket.emit('history', historyMessages);
         generalLog(new Date(), `发送历史消息给 Socket ${socket.id}，房间: ${room}`);
       } catch (error) {
         generalLog(new Date(), `获取历史消息失败 | 房间: ${room} | 错误: ${error}`);
@@ -68,7 +61,7 @@ function handleSocket(io: Server) {
       }
 
       // 监听同步数据事件
-      socket.on('syncData', (data: SyncData) => {
+      socket.on('syncData', (data: Message) => {
         messageLog(new Date(), room, userId, data.type);
 
         // 存储消息到数据库，获取服务器记录的时间戳
@@ -82,10 +75,10 @@ function handleSocket(io: Server) {
         }
 
         // 广播消息到房间内的所有用户，包括发送者，附带发送者的 userId 和 timestamp
-        const dataToSend: SyncData = {
+        const dataToSend: Message = {
           type: data.type,
           content: data.content,
-          fromUserId: userId,
+          userId: userId,
           timestamp: timestamp
         };
         io.in(room).emit('syncData', dataToSend);

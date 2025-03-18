@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import config from './config';
 import fs from 'fs';
-import { HistoryMessage } from './types';
+import { Message } from './types';
 import { generalLog } from './logger';
 
 // 定义 InsertResult 接口
@@ -91,17 +91,18 @@ export function insertMessage(room: string, userId: string, type: 'text' | 'imag
  * @param room 房间号
  * @returns 消息数组
  */
-export function getMessages(room: string): HistoryMessage[] {
+export function getMessages(room: string): Message[] {
   try {
     const db = getRoomDB(room);
     const stmt = db.prepare(`
-      SELECT id, userId, type, content, timestamp
+      SELECT userId, type, content, timestamp
       FROM messages
       ORDER BY timestamp ASC
     `);
     
-    const messages = stmt.all() as HistoryMessage[];
+    const messages = stmt.all() as Message[];
     generalLog(new Date(), `获取房间 ${room} 的历史消息数量: ${messages.length}`);
+
     return messages;
   } catch (error) {
     generalLog(new Date(), `获取房间 ${room} 的历史消息失败: ${error}`);
