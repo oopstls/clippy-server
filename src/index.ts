@@ -4,6 +4,16 @@ import config from './config';
 import handleSocket from './socket';
 import './db'; // 确保数据库初始化
 
+console.log(`
+  ####   ####      ####    ######   ######   ##  ##
+ ##  ##   ##        ##      ##  ##   ##  ##  ##  ##
+##        ##        ##      ##  ##   ##  ##  ##  ##
+##        ##        ##      #####    #####    ####
+##        ##   #    ##      ##       ##        ##
+ ##  ##   ##  ##    ##      ##       ##        ##
+  ####   #######   ####    ####     ####      ####
+  `)
+
 // 创建 HTTP 服务器
 const httpServer = createServer();
 
