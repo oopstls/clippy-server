@@ -141,6 +141,8 @@
     <!-- 用户注册表单 -->
     <div id="registration">
         <h2>Register</h2>
+        <input type="text" id="serverInput" placeholder="服务器地址" value="127.0.0.1">
+        <input type="text" id="portInput" placeholder="服务器端口" value="8989">
         <input type="text" id="roomInput" placeholder="Room ID (同步房间)">
         <input type="text" id="userIdInput" placeholder="User ID (用户ID)">
         <button id="connectButton" onclick="connect()">Connect</button>
@@ -171,6 +173,8 @@
         const registration = document.getElementById('registration');
         const controls = document.getElementById('controls');
         const messages = document.getElementById('messages');
+        const serverInput = document.getElementById('serverInput');
+        const portInput = document.getElementById('portInput');
         const roomInput = document.getElementById('roomInput');
         const userIdInput = document.getElementById('userIdInput');
         const messageInput = document.getElementById('messageInput');
@@ -178,6 +182,28 @@
         const connectButton = document.getElementById('connectButton');
         const disconnectButton = document.getElementById('disconnectButton');
         const sendTextButton = document.getElementById('sendTextButton');
+        
+        // 确保输入框可以输入
+        serverInput.readOnly = false;
+        portInput.readOnly = false;
+        
+        // 添加焦点事件，便于调试
+        serverInput.addEventListener('focus', function() {
+            console.log('服务器地址输入框获得焦点');
+        });
+        
+        portInput.addEventListener('focus', function() {
+            console.log('服务器端口输入框获得焦点');
+        });
+        
+        // 添加输入事件，显示用户输入
+        serverInput.addEventListener('input', function() {
+            console.log('服务器地址输入:', this.value);
+        });
+        
+        portInput.addEventListener('input', function() {
+            console.log('服务器端口输入:', this.value);
+        });
 
         /**
          * 连接到服务器并注册
@@ -185,14 +211,18 @@
         function connect() {
             room = roomInput.value.trim();
             userId = userIdInput.value.trim();
+            const server = serverInput.value.trim() || '127.0.0.1';
+            const port = portInput.value.trim() || '8989';
+            
+            console.log(`尝试连接到 ${server}:${port}`);
 
             if (!room || !userId) {
-                alert('Please enter both Room ID and User ID.');
+                alert('请输入房间ID和用户ID');
                 return;
             }
 
             // 初始化 Socket.io 客户端，指定仅使用 WebSocket 传输
-            socket = io('http://synchro.oopstls.com:7000', {
+            socket = io(`http://${server}:${port}`, {
                 autoConnect: false,
                 transports: ['websocket']
             });
@@ -217,20 +247,40 @@
             // 监听连接错误事件
             socket.on('connect_error', (error) => {
                 console.error('Connection Error:', error);
-                alert('Failed to connect to the server.');
+                const errorMessage = `连接失败: ${error.message || '无法连接到服务器'}\n请检查:\n1. 服务器地址和端口是否正确\n2. 服务器是否正在运行\n3. 网络连接是否正常`;
+                alert(errorMessage);
                 status.textContent = 'Connection Error';
                 status.className = 'disconnected';
+                
+                // 重置按钮状态
+                connectButton.disabled = false;
+                disconnectButton.disabled = true;
+                
+                // 隐藏发送控件
+                controls.style.display = 'none';
             });
 
             // 监听注册错误事件
             socket.on('registrationError', (data) => {
-                alert(`Registration Error: ${data.message}`);
+                const errorMessage = `注册失败: ${data.message}\n请检查:\n1. 房间ID和用户ID是否已填写\n2. 用户ID是否已被使用\n3. 服务器是否正常运行`;
+                alert(errorMessage);
                 disconnect();
             });
 
             // 监听断开连接事件
             socket.on('disconnect', (reason) => {
-                status.textContent = 'Disconnected';
+                let statusMessage = 'Disconnected';
+                if (reason === 'io server disconnect') {
+                    statusMessage = '服务器断开连接';
+                } else if (reason === 'io client disconnect') {
+                    statusMessage = '客户端断开连接';
+                } else if (reason === 'transport close') {
+                    statusMessage = '连接关闭';
+                } else if (reason === 'transport error') {
+                    statusMessage = '传输错误';
+                }
+                
+                status.textContent = statusMessage;
                 status.className = 'disconnected';
                 console.log(`Disconnected from server: ${reason}`);
 
