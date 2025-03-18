@@ -1,7 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import log from './logger';
 import { SyncData, RegisterData, HistoryMessage } from './types';
-import { insertMessage, getMessages, deleteMessages } from './db';
+import { insertMessage, getMessages, closeRoomDB } from './db';
 
 // 房间用户管理：Map<room, Map<userId, Socket>>
 const roomUsers: Map<string, Map<string, Socket>> = new Map();
@@ -119,7 +119,9 @@ function handleSocket(io: Server) {
 
           if (users.size === 0) {
             roomUsers.delete(room);
-            console.log(`房间 ${room} 中的所有用户已断开`);
+            // 关闭房间的数据库连接
+            closeRoomDB(room);
+            console.log(`房间 ${room} 中的所有用户已断开，数据库连接已关闭`);
           }
         }
       });

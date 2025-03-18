@@ -5,7 +5,7 @@ const config = {
     file: 'logs/server.log'    // 日志文件路径
   },
   database: {
-    path: 'data/messages.db'   // 数据库文件路径
+    path: 'data'   // 消息记录存储路径
   }
 };
 

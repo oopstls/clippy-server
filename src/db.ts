@@ -10,41 +10,47 @@ interface InsertResult {
 }
 
 // 确保数据库目录存在
-const dbDir = path.join(__dirname, '../data');
+const dbDir = path.join(__dirname, '../', config.database.path);
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
   console.log(`已创建数据库目录: ${dbDir}`);
 }
 
-// 数据库文件路径
-const dbPath = path.join(dbDir, 'messages.db');
+// 数据库连接缓存
+const dbConnections: Map<string, Database.Database> = new Map();
 
-// 初始化数据库
-let db: Database.Database;
-try {
-  db = new Database(dbPath);
-  console.log(`成功连接到数据库: ${dbPath}`);
-} catch (error) {
-  console.error(`无法连接到数据库: ${error}`);
-  throw error; // 重新抛出错误，防止服务器继续运行
-}
+/**
+ * 获取或创建房间的数据库连接
+ * @param room 房间号
+ * @returns 数据库连接实例
+ */
+function getRoomDB(room: string): Database.Database {
+  if (dbConnections.has(room)) {
+    return dbConnections.get(room)!;
+  }
 
-// 创建 messages 表，如果不存在
-try {
-  db.prepare(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      room TEXT NOT NULL,
-      userId TEXT NOT NULL,
-      type TEXT CHECK(type IN ('text', 'image')) NOT NULL,
-      content TEXT NOT NULL,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `).run();
-  console.log(`确保 'messages' 表存在`);
-} catch (error) {
-  console.error(`无法创建或验证 'messages' 表: ${error}`);
-  throw error;
+  const dbPath = path.join(dbDir, `${room}.db`);
+  try {
+    const db = new Database(dbPath);
+    
+    // 创建 messages 表
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId TEXT NOT NULL,
+        type TEXT CHECK(type IN ('text', 'image')) NOT NULL,
+        content TEXT NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+    
+    dbConnections.set(room, db);
+    console.log(`成功连接到房间 ${room} 的数据库: ${dbPath}`);
+    return db;
+  } catch (error) {
+    console.error(`无法连接到房间 ${room} 的数据库: ${error}`);
+    throw error;
+  }
 }
 
 /**
@@ -57,14 +63,14 @@ try {
  */
 export function insertMessage(room: string, userId: string, type: 'text' | 'image', content: string): string {
   try {
+    const db = getRoomDB(room);
     const stmt = db.prepare(`
-      INSERT INTO messages (room, userId, type, content)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO messages (userId, type, content)
+      VALUES (?, ?, ?)
       RETURNING timestamp
     `);
     
-    // 使用类型断言将返回值转换为 InsertResult
-    const result = stmt.get(room, userId, type, content) as InsertResult;
+    const result = stmt.get(userId, type, content) as InsertResult;
     
     console.log(`插入消息到房间 ${room} | 用户ID: ${userId} | 类型: ${type} | 时间戳: ${result.timestamp}`);
     
@@ -86,14 +92,14 @@ export function insertMessage(room: string, userId: string, type: 'text' | 'imag
  */
 export function getMessages(room: string): HistoryMessage[] {
   try {
+    const db = getRoomDB(room);
     const stmt = db.prepare(`
-      SELECT id, room, userId, type, content, timestamp
+      SELECT id, userId, type, content, timestamp
       FROM messages
-      WHERE room = ?
       ORDER BY timestamp ASC
     `);
-    // 传递 room 参数给 stmt.all()
-    const messages = stmt.all(room) as HistoryMessage[];
+    
+    const messages = stmt.all() as HistoryMessage[];
     console.log(`获取房间 ${room} 的历史消息数量: ${messages.length}`);
     return messages;
   } catch (error) {
@@ -103,22 +109,17 @@ export function getMessages(room: string): HistoryMessage[] {
 }
 
 /**
- * 删除指定房间的所有消息
+ * 关闭指定房间的数据库连接
  * @param room 房间号
  */
-export function deleteMessages(room: string): void {
-  try {
-    const stmt = db.prepare(`
-      DELETE FROM messages
-      WHERE room = ?
-    `);
-    const result = stmt.run(room);
-    console.log(`删除房间 ${room} 的所有消息，受影响行数: ${result.changes}`);
-  } catch (error) {
-    console.error(`删除房间 ${room} 的消息失败: ${error}`);
-    throw error;
+export function closeRoomDB(room: string): void {
+  const db = dbConnections.get(room);
+  if (db) {
+    db.close();
+    dbConnections.delete(room);
+    console.log(`已关闭房间 ${room} 的数据库连接`);
   }
 }
 
-export default db;
+export default dbConnections;
 
