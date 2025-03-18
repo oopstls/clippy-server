@@ -7,18 +7,6 @@ import { insertMessage, getMessages, closeRoomDB } from './db';
 const roomUsers: Map<string, Map<string, Socket>> = new Map();
 
 /**
- * 获取当前日期的字符串格式 YYYY-MM-DD
- * @returns 当前日期字符串
- */
-function getCurrentDateString(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-/**
  * 处理Socket连接
  * @param io Socket.io 服务器实例
  */

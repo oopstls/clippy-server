@@ -33,7 +33,7 @@ export function messageLog(
   console.log(logContent);
 
   // 记录到日志文件
-  const logFilePath = path.join(__dirname, '../', config.log.file);
+  const logFilePath = path.join(__dirname, '../', config.log.path, config.log.file);
 
   fs.appendFile(logFilePath, logContent, (err) => {
     if (err) {
