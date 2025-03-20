@@ -64,10 +64,20 @@ function handleSocket(io: Server) {
       socket.on('sendMessage', (data: Message) => {
         messageLog(new Date(), room, userId, data.type);
 
+        // 检查clipReg值是否有效
+        let clipReg = data.clipReg;
+        if (data.type === 'image') {
+          clipReg = undefined; // 图片类型强制clipReg为空
+        } else if (clipReg !== undefined && (clipReg < 0 || clipReg > 5 || !Number.isInteger(clipReg))) {
+          generalLog(new Date(), `无效的clipReg值 | 房间: ${room} | 用户ID: ${userId} | clipReg: ${clipReg}`);
+          socket.emit('error', { message: 'Invalid clipReg value. It must be an integer between 0 and 5.' });
+          return; // 如果clipReg无效，不处理消息
+        }
+
         // 存储消息到数据库，获取服务器记录的时间戳
         let timestamp: string;
         try {
-          timestamp = insertMessage(room, userId, data.type, data.content);
+          timestamp = insertMessage(room, userId, data.type, data.content, clipReg);
         } catch (error) {
           generalLog(new Date(), `存储消息失败 | 房间: ${room} | 用户ID: ${userId} | 类型: ${data.type} | 错误: ${error}`);
           socket.emit('error', { message: 'Failed to store message.' }); // 发送错误给客户端
@@ -79,7 +89,8 @@ function handleSocket(io: Server) {
           type: data.type,
           content: data.content,
           userId: userId,
-          timestamp: timestamp
+          timestamp: timestamp,
+          clipReg: clipReg
         };
         io.in(room).emit('sendMessage', dataToSend);
       });

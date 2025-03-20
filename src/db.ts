@@ -41,7 +41,8 @@ function getRoomDB(room: string): Database.Database {
         userId TEXT NOT NULL,
         type TEXT CHECK(type IN ('text', 'image')) NOT NULL,
         content TEXT NOT NULL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        clipReg INTEGER CHECK(clipReg IS NULL OR (clipReg >= 0 AND clipReg <= 5))
       )
     `).run();
     
@@ -60,20 +61,24 @@ function getRoomDB(room: string): Database.Database {
  * @param userId 用户ID
  * @param type 消息类型 ('text' | 'image')
  * @param content 消息内容
+ * @param clipReg clipReg值(0-5)，仅text类型可能有值
  * @returns 服务器记录的时间戳
  */
-export function insertMessage(room: string, userId: string, type: 'text' | 'image', content: string): string {
+export function insertMessage(room: string, userId: string, type: 'text' | 'image', content: string, clipReg?: number): string {
   try {
     const db = getRoomDB(room);
     const stmt = db.prepare(`
-      INSERT INTO messages (userId, type, content)
-      VALUES (?, ?, ?)
+      INSERT INTO messages (userId, type, content, clipReg)
+      VALUES (?, ?, ?, ?)
       RETURNING timestamp
     `);
     
-    const result = stmt.get(userId, type, content) as InsertResult;
+    // 如果是image类型，确保clipReg为null
+    const clipRegValue = type === 'image' ? null : clipReg;
     
-    generalLog(new Date(), `插入消息到房间 ${room} | 用户ID: ${userId} | 类型: ${type} | 时间戳: ${result.timestamp}`);
+    const result = stmt.get(userId, type, content, clipRegValue) as InsertResult;
+    
+    generalLog(new Date(), `插入消息到房间 ${room} | 用户ID: ${userId} | 类型: ${type} | 时间戳: ${result.timestamp} | clipReg: ${clipRegValue}`);
     
     if (result && result.timestamp) {
       return result.timestamp;
@@ -95,7 +100,7 @@ export function getMessages(room: string): Message[] {
   try {
     const db = getRoomDB(room);
     const stmt = db.prepare(`
-      SELECT userId, type, content, timestamp
+      SELECT userId, type, content, timestamp, clipReg
       FROM messages
       ORDER BY timestamp ASC
     `);
