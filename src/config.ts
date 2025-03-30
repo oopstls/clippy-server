@@ -1,5 +1,5 @@
 const config = {
-  port: 8989,           // 服务器监听端口
+  port: 7000,           // 服务器监听端口
   log: {
     path: 'logs',       // 日志文件路径
     file: 'server.log'  // 日志文件名
