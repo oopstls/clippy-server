@@ -74,22 +74,23 @@ function handleSocket(io: Server) {
           return; // 如果clipReg无效，不处理消息
         }
 
-        // 存储消息到数据库，获取服务器记录的时间戳
-        let timestamp: string;
+        // 存储消息到数据库，获取服务器记录的时间戳和ID
+        let result: {id: number, timestamp: string};
         try {
-          timestamp = insertMessage(room, userId, data.type, data.content, clipReg);
+          result = insertMessage(room, userId, data.type, data.content, clipReg);
         } catch (error) {
           generalLog(new Date(), `存储消息失败 | 房间: ${room} | 用户ID: ${userId} | 类型: ${data.type} | 错误: ${error}`);
           socket.emit('error', { message: 'Failed to store message.' }); // 发送错误给客户端
           return; // 如果存储失败，不广播消息
         }
 
-        // 广播消息到房间内的所有用户，包括发送者，附带发送者的 userId 和 timestamp
+        // 广播消息到房间内的所有用户，包括发送者，附带发送者的 userId、timestamp 和 id
         const dataToSend: Message = {
+          id: result.id,
           type: data.type,
           content: data.content,
           userId: userId,
-          timestamp: timestamp,
+          timestamp: result.timestamp,
           clipReg: clipReg
         };
         io.in(room).emit('sendMessage', dataToSend);

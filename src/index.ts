@@ -4,6 +4,9 @@ import { Server } from 'socket.io';
 import config from './config';
 import handleSocket from './socket';
 import './db';
+import express from 'express';
+import cors from 'cors';
+import apiRoutes from './routes';
 
 generalLog(new Date(), `
   ####   ####      ####    ######   ######   ##  ##
@@ -13,10 +16,17 @@ generalLog(new Date(), `
 ##        ##   #    ##      ##       ##        ##
  ##  ##   ##  ##    ##      ##       ##        ##
   ####   #######   ####    ####     ####      ####
-  `)
+  `);
+
+// 创建 Express 应用
+const app = express();
+app.use(cors());
+
+// 使用API路由
+app.use('/', apiRoutes);
 
 // 创建 HTTP 服务器
-const httpServer = createServer();
+const httpServer = createServer(app);
 
 // 初始化 Socket.io 服务器
 const io = new Server(httpServer, {
@@ -36,5 +46,4 @@ handleSocket(io);
 // 启动服务器监听
 httpServer.listen(config.port, () => {
   generalLog(new Date(), `服务器正在端口 ${config.port} 上运行`);
-});
-
+}); 

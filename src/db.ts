@@ -7,6 +7,7 @@ import { generalLog } from './logger';
 
 // 定义 InsertResult 接口
 interface InsertResult {
+  id: number;
   timestamp: string;
 }
 
@@ -56,21 +57,21 @@ function getRoomDB(room: string): Database.Database {
 }
 
 /**
- * 插入一条消息到数据库，并返回时间戳
+ * 插入一条消息到数据库，并返回时间戳和ID
  * @param room 房间号
  * @param userId 用户ID
  * @param type 消息类型 ('text' | 'image')
  * @param content 消息内容
  * @param clipReg clipReg值(0-5)，仅text类型可能有值
- * @returns 服务器记录的时间戳
+ * @returns {id: number, timestamp: string} 消息ID和服务器记录的时间戳
  */
-export function insertMessage(room: string, userId: string, type: 'text' | 'image', content: string, clipReg?: number): string {
+export function insertMessage(room: string, userId: string, type: 'text' | 'image', content: string, clipReg?: number): {id: number, timestamp: string} {
   try {
     const db = getRoomDB(room);
     const stmt = db.prepare(`
       INSERT INTO messages (userId, type, content, clipReg)
       VALUES (?, ?, ?, ?)
-      RETURNING timestamp
+      RETURNING id, timestamp
     `);
     
     // 如果是image类型，确保clipReg为null
@@ -78,12 +79,12 @@ export function insertMessage(room: string, userId: string, type: 'text' | 'imag
     
     const result = stmt.get(userId, type, content, clipRegValue) as InsertResult;
     
-    generalLog(new Date(), `插入消息到房间 ${room} | 用户ID: ${userId} | 类型: ${type} | 时间戳: ${result.timestamp} | clipReg: ${clipRegValue}`);
+    generalLog(new Date(), `插入消息到房间 ${room} | 用户ID: ${userId} | 类型: ${type} | ID: ${result.id} | 时间戳: ${result.timestamp} | clipReg: ${clipRegValue}`);
     
     if (result && result.timestamp) {
-      return result.timestamp;
+      return { id: result.id, timestamp: result.timestamp };
     } else {
-      throw new Error('Failed to retrieve timestamp after inserting message');
+      throw new Error('Failed to retrieve id and timestamp after inserting message');
     }
   } catch (error) {
     generalLog(new Date(), `插入消息失败 | 房间: ${room} | 用户ID: ${userId} | 类型: ${type} | 错误: ${error}`);
@@ -100,7 +101,7 @@ export function getMessages(room: string): Message[] {
   try {
     const db = getRoomDB(room);
     const stmt = db.prepare(`
-      SELECT userId, type, content, timestamp, clipReg
+      SELECT id, userId, type, content, timestamp, clipReg
       FROM messages
       ORDER BY timestamp ASC
     `);
@@ -125,6 +126,36 @@ export function closeRoomDB(room: string): void {
     db.close();
     dbConnections.delete(room);
     generalLog(new Date(), `已关闭房间 ${room} 的数据库连接`);
+  }
+}
+
+/**
+ * 获取指定房间的特定消息
+ * @param room 房间号
+ * @param messageId 消息ID
+ * @returns 消息对象，如果未找到则返回null
+ */
+export function getMessage(room: string, messageId: number): Message | null {
+  try {
+    const db = getRoomDB(room);
+    const stmt = db.prepare(`
+      SELECT id, userId, type, content, timestamp, clipReg
+      FROM messages
+      WHERE id = ?
+    `);
+    
+    const message = stmt.get(messageId) as Message | null;
+    
+    if (message) {
+      generalLog(new Date(), `获取房间 ${room} 中ID为 ${messageId} 的消息成功`);
+    } else {
+      generalLog(new Date(), `房间 ${room} 中未找到ID为 ${messageId} 的消息`);
+    }
+    
+    return message;
+  } catch (error) {
+    generalLog(new Date(), `获取房间 ${room} 中ID为 ${messageId} 的消息失败: ${error}`);
+    throw error;
   }
 }
 
