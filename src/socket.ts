@@ -36,14 +36,6 @@ function handleSocket(io: Server) {
 
       const usersInRoom = roomUsers.get(room)!;
 
-      // 检查用户ID是否已存在
-      if (usersInRoom.has(userId)) {
-        generalLog(new Date(), `用户ID ${userId} 在房间 ${room} 已存在，断开连接`);
-        socket.emit('registrationError', { message: 'User ID already exists in this room.' });
-        socket.disconnect();
-        return;
-      }
-
       // 注册用户
       usersInRoom.set(userId, socket);
       socket.join(room);
