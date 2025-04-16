@@ -12,3 +12,8 @@ export type RegisterData = {
   userId: string;  // 用户 ID
 };
 
+export type RequestHistoryData = {
+  room: string;    // 房间 ID
+  fromId: number;  // 请求ID大于等于此值的消息
+};
+

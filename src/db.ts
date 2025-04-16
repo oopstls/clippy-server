@@ -93,21 +93,23 @@ export function insertMessage(room: string, userId: string, type: 'text' | 'imag
 }
 
 /**
- * 获取指定房间的历史消息
+ * 获取指定房间中ID大于等于给定ID的历史消息
  * @param room 房间号
+ * @param fromId 起始消息ID（包含此ID）
  * @returns 消息数组
  */
-export function getMessages(room: string): Message[] {
+export function getMessagesFromId(room: string, fromId: number): Message[] {
   try {
     const db = getRoomDB(room);
     const stmt = db.prepare(`
       SELECT id, userId, type, content, timestamp, clipReg
       FROM messages
+      WHERE id >= ?
       ORDER BY timestamp ASC
     `);
     
-    const messages = stmt.all() as Message[];
-    generalLog(new Date(), `获取房间 ${room} 的历史消息数量: ${messages.length}`);
+    const messages = stmt.all(fromId) as Message[];
+    generalLog(new Date(), `获取房间 ${room} 的历史消息数量: ${messages.length}，起始ID: ${fromId}`);
 
     return messages;
   } catch (error) {
